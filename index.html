@@ -8,27 +8,38 @@
     html, body { margin: 0; padding: 0; height: 100%; }
     #map { height: 100vh; }
     #controls {
-      position: absolute;
-      top: 10px;
-      left: 10px;
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
       z-index: 1000;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 10px 12px;
-      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 8px 16px;
       font-family: sans-serif;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-      max-width: 320px;
+      box-shadow: 0 -2px 6px rgba(0,0,0,0.15);
+    }
+    #controls-inner {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    #slider-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 6px;
     }
     #time-display {
       font-weight: bold;
-      margin-bottom: 6px;
       font-size: 14px;
+      white-space: nowrap;
     }
     #time-slider {
       width: 100%;
     }
     #legend {
-      margin-top: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
       font-size: 13px;
       line-height: 1.4;
     }
@@ -36,7 +47,6 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      margin-bottom: 2px;
     }
     .swatch {
       width: 10px;
@@ -50,21 +60,65 @@
     .grandad { background: darkblue; }
     .estelle { background: purple; }
     .george { background: green; }
+
+    #places-legend {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-family: sans-serif;
+      font-size: 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      max-width: 260px;
+    }
+    #places-legend-title {
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+    .place-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      margin-bottom: 2px;
+    }
+    .place-pin {
+      font-size: 12px;
+      line-height: 1.2;
+    }
   </style>
 </head>
 <body>
+<div id="places-legend">
+  <div id="places-legend-title">Locations</div>
+  <div class="place-item"><span class="place-pin">📍</span><span>Paviors – Burntstump Hill, Arnold</span></div>
+  <div class="place-item"><span class="place-pin">📍</span><span>Ballet – St Giles, West Bridgford</span></div>
+  <div class="place-item"><span class="place-pin">📍</span><span>Football – Digby Avenue, Mapperley</span></div>
+  <div class="place-item"><span class="place-pin">📍</span><span>Swimming – Arnold Leisure Centre</span></div>
+  <div class="place-item"><span class="place-pin">📍</span><span>Home – 21 Cannon St</span></div>
+  <div class="place-item"><span class="place-pin">📍</span><span>Granny &amp; Grandad – Burton Joyce</span></div>
+  <div class="place-item"><span class="place-pin">📍</span><span>Party – Gedling Road, Woodthorpe</span></div>
+</div>
+
 <div id="controls">
-  <div id="time-display">Time: 08:30</div>
-  <input type="range" id="time-slider" min="510" max="990" value="510" step="1" />
-  <div id="legend">
-    <div class="legend-item"><span class="swatch alex"></span> Alex (pink)</div>
-    <div class="legend-item"><span class="swatch estelle"></span> Estelle (purple)</div>
-    <div class="legend-item"><span class="swatch billy"></span> Billy (light blue)</div>
-    <div class="legend-item"><span class="swatch george"></span> George (green)</div>
-    <div class="legend-item"><span class="swatch granny"></span> Granny (red)</div>
-    <div class="legend-item"><span class="swatch grandad"></span> Grandad (dark blue)</div>
+  <div id="controls-inner">
+    <div id="slider-row">
+      <div id="time-display">Time: 08:30</div>
+      <input type="range" id="time-slider" min="510" max="990" value="510" step="1" />
+    </div>
+    <div id="legend">
+      <div class="legend-item"><span class="swatch alex"></span> Alex (pink)</div>
+      <div class="legend-item"><span class="swatch estelle"></span> Estelle (purple)</div>
+      <div class="legend-item"><span class="swatch billy"></span> Billy (light blue)</div>
+      <div class="legend-item"><span class="swatch george"></span> George (green)</div>
+      <div class="legend-item"><span class="swatch granny"></span> Granny (red)</div>
+      <div class="legend-item"><span class="swatch grandad"></span> Grandad (dark blue)</div>
+    </div>
   </div>
 </div>
+
 <div id="map"></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -163,12 +217,27 @@ const schedules = {
   ]
 };
 
+// Create small offsets so people at the same place don't overlap
+const offsets = {
+  alex:   [ 0.00040,  0.00000],
+  estelle:[-0.00040,  0.00000],
+  billy:  [ 0.00000,  0.00040],
+  george: [ 0.00000, -0.00040],
+  granny: [ 0.00030,  0.00030],
+  grandad:[-0.00030, -0.00030]
+};
+
+function applyOffset(latlng, person) {
+  const off = offsets[person] || [0, 0];
+  return [latlng[0] + off[0], latlng[1] + off[1]];
+}
+
 // Create markers for each person
 const markers = {};
 for (const person in colours) {
   const startLocKey = defaultLocation[person];
   const startLatLng = locations[startLocKey];
-  markers[person] = L.circleMarker(startLatLng, {
+  markers[person] = L.circleMarker(applyOffset(startLatLng, person), {
     radius: 8,
     color: colours[person],
     fillColor: colours[person],
@@ -193,17 +262,17 @@ function formatTime(minutes) {
 function getPositionFor(person, t) {
   const segs = schedules[person] || [];
   if (segs.length === 0) {
-    return locations[defaultLocation[person]];
+    return applyOffset(locations[defaultLocation[person]], person);
   }
 
   // Before first segment
   if (t < segs[0].start) {
-    return locations[defaultLocation[person]];
+    return applyOffset(locations[defaultLocation[person]], person);
   }
 
   // After last segment
   if (t > segs[segs.length - 1].end) {
-    return locations[segs[segs.length - 1].to];
+    return applyOffset(locations[segs[segs.length - 1].to], person);
   }
 
   // During a segment or between segments
@@ -212,20 +281,20 @@ function getPositionFor(person, t) {
       const from = locations[s.from];
       const to = locations[s.to];
       const ratio = (t - s.start) / (s.end - s.start || 1);
-      const lat = from[0] + (to[0] - from[0]) * ratio;
-      const lng = from[1] + (to[1] - from[1]) * ratio;
-      return [lat, lng];
+      const baseLat = from[0] + (to[0] - from[0]) * ratio;
+      const baseLng = from[1] + (to[1] - from[1]) * ratio;
+      return applyOffset([baseLat, baseLng], person);
     }
   }
 
   // If exactly between segments, just hold last known location
   for (let i = 0; i < segs.length - 1; i++) {
     if (t > segs[i].end && t < segs[i+1].start) {
-      return locations[segs[i].to];
+      return applyOffset(locations[segs[i].to], person);
     }
   }
 
-  return locations[defaultLocation[person]];
+  return applyOffset(locations[defaultLocation[person]], person);
 }
 
 function updateAllPositions(t) {
