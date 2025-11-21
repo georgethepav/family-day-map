@@ -157,33 +157,45 @@ function toMinutes(t) {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;
 }
+function formatTime(minutes) {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  const hh = h.toString().padStart(2, '0');
+  const mm = m.toString().padStart(2, '0');
+  return `${hh}:${mm}`;
+}
 
-// --- All locations ---
+// --- DOM references ---
+const timeSlider   = document.getElementById('time-slider');
+const timeDisplay  = document.getElementById('time-display');
+const playPauseBtn = document.getElementById('play-pause');
+
+// --- Locations ---
 const locations = {
-  house:   [52.954205, -1.146630],
-  ballet:  [52.930870, -1.129820],
-  football:[52.988680, -1.111820],
-  swimming:[53.000690, -1.133000],
-  paviors: [53.023270, -1.142700],
-  granny:  [52.986890, -1.032500],
-  party:   [52.993650, -1.132550],
-  work:    [52.979500, -1.214000]
+  house:[52.954205,-1.146630],
+  ballet:[52.930870,-1.129820],
+  football:[52.988680,-1.111820],
+  swimming:[53.000690,-1.133000],
+  paviors:[53.023270,-1.142700],
+  granny:[52.986890,-1.032500],
+  party:[52.993650,-1.132550],
+  work:[52.979500,-1.214000]
 };
 
 // --- Map ---
 const map = L.map('map').setView([52.97, -1.14], 12);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
 
-// Pins with popups
+// Pins
 const placeLabels = {
-  house:"Home", ballet:"Ballet", football:"Football", swimming:"Swimming",
-  paviors:"Paviors", granny:"Granny & Grandad", party:"Party", work:"Estelle's Work"
+ house:"Home", ballet:"Ballet", football:"Football", swimming:"Swimming",
+ paviors:"Paviors", granny:"Granny & Grandad", party:"Party", work:"Estelle's Work"
 };
 for (const key in locations) {
   L.marker(locations[key]).addTo(map).bindPopup(placeLabels[key]);
 }
 
-// --- People & colours ---
+// People
 const colours = {
   alex:'pink', granny:'red', billy:'lightblue',
   grandad:'darkblue', estelle:'purple', george:'green'
@@ -194,125 +206,135 @@ const defaultLocation = {
   granny:'granny', grandad:'granny'
 };
 
-// --- Offsets (reduced to good size) ---
+// --- OFFSETS (30% smaller than previous good ones) ---
 const offsets = {
-  alex:[0.003,0], estelle:[-0.003,0],
-  billy:[0,0.003], george:[0,-0.003],
-  granny:[0.002,0.002], grandad:[-0.002,-0.002]
+  alex:    [ 0.0021,  0.0000],
+  estelle: [-0.0021,  0.0000],
+  billy:   [ 0.0000,  0.0021],
+  george:  [ 0.0000, -0.0021],
+  granny:  [ 0.0014,  0.0014],
+  grandad: [-0.0014, -0.0014]
 };
 
-function applyOffset(latlng, person) {
-  const off = offsets[person] || [0,0];
-  return [latlng[0] + off[0], latlng[1] + off[1]];
+function applyOffset(latlng, person){
+  const off=offsets[person] || [0,0];
+  return [latlng[0]+off[0], latlng[1]+off[1]];
 }
 
-// Time segments helper
-function seg(start,end,from,to){ return {
-  start: toMinutes(start), end: toMinutes(end), from, to
-}; }
+// Schedules
+function seg(s,e,f,t){return{start:toMinutes(s),end:toMinutes(e),from:f,to:t};}
 
-// --- Schedules ---
-const schedules = {
-  estelle:[
-    seg('08:30','09:00','house','ballet'),
-    seg('09:45','10:25','ballet','swimming'),
-    seg('11:30','11:45','swimming','house'),
-    seg('13:00','13:20','house','granny'),
-    seg('13:30','14:00','granny','party'),
-    seg('14:05','14:30','party','work')
-  ],
-  alex:[
-    seg('08:30','09:00','house','ballet'),
-    seg('09:45','10:25','ballet','swimming'),
-    seg('11:30','11:45','swimming','house'),
-    seg('13:00','13:20','house','granny'),
-    seg('13:45','14:15','granny','paviors'),
-    seg('15:30','16:00','paviors','party'),
-    seg('16:00','16:30','party','paviors')
-  ],
-  billy:[
-    seg('08:45','09:00','house','football'),
-    seg('10:00','10:10','football','house'),
-    seg('13:00','13:20','house','granny'),
-    seg('13:30','14:00','granny','party'),
-    seg('16:00','16:30','party','paviors')
-  ],
-  george:[
-    seg('08:45','09:00','house','football'),
-    seg('10:00','10:10','football','house'),
-    seg('11:55','12:15','house','granny'),
-    seg('12:15','12:45','granny','paviors')
-  ],
-  grandad:[ seg('12:15','12:45','granny','paviors') ],
-  granny:[
-    seg('13:45','14:15','granny','paviors'),
-    seg('15:30','16:00','paviors','party'),
-    seg('16:00','16:30','party','paviors')
-  ]
+const schedules={
+ estelle:[
+  seg('08:30','09:00','house','ballet'),
+  seg('09:45','10:25','ballet','swimming'),
+  seg('11:30','11:45','swimming','house'),
+  seg('13:00','13:20','house','granny'),
+  seg('13:30','14:00','granny','party'),
+  seg('14:05','14:30','party','work')
+ ],
+ alex:[
+  seg('08:30','09:00','house','ballet'),
+  seg('09:45','10:25','ballet','swimming'),
+  seg('11:30','11:45','swimming','house'),
+  seg('13:00','13:20','house','granny'),
+  seg('13:45','14:15','granny','paviors'),
+  seg('15:30','16:00','paviors','party'),
+  seg('16:00','16:30','party','paviors')
+ ],
+ billy:[
+  seg('08:45','09:00','house','football'),
+  seg('10:00','10:10','football','house'),
+  seg('13:00','13:20','house','granny'),
+  seg('13:30','14:00','granny','party'),
+  seg('16:00','16:30','party','paviors')
+ ],
+ george:[
+  seg('08:45','09:00','house','football'),
+  seg('10:00','10:10','football','house'),
+  seg('11:55','12:15','house','granny'),
+  seg('12:15','12:45','granny','paviors')
+ ],
+ grandad:[ seg('12:15','12:45','granny','paviors') ],
+ granny:[
+  seg('13:45','14:15','granny','paviors'),
+  seg('15:30','16:00','paviors','party'),
+  seg('16:00','16:30','party','paviors')
+ ]
 };
 
-// --- Create markers (with REAL black border) ---
-const markers = {};
-for (const person in colours) {
-  const start = locations[defaultLocation[person]];
-  markers[person] = L.circleMarker(applyOffset(start, person), {
-    radius: 10,
-    stroke: true,
-    fill: true,
-    color: "black",      // <-- visible border
-    weight: 3,           // <-- thickness
-    fillColor: colours[person],
-    fillOpacity: 1
+// --- Create markers (with visible black border) ---
+const markers={};
+for(const person in colours){
+  const start=locations[defaultLocation[person]];
+  markers[person]=L.circleMarker(applyOffset(start,person),{
+    radius:10,
+    stroke:true,
+    fill:true,
+    color:"black",
+    weight:3,
+    fillColor:colours[person],
+    fillOpacity:1
   })
-.addTo(map)
-.bindTooltip(person.charAt(0).toUpperCase()+person.slice(1),{offset:[10,0]});
+  .addTo(map)
+  .bindTooltip(person.charAt(0).toUpperCase()+person.slice(1),{offset:[10,0]});
 }
 
 // Position calculation
-function getPositionFor(person,t){
-  const s=schedules[person]; if(!s) return applyOffset(locations[defaultLocation[person]],person);
-  if(t<s[0].start) return applyOffset(locations[defaultLocation[person]],person);
-  if(t>s[s.length-1].end) return applyOffset(locations[s[s.length-1].to],person);
-  for(const seg of s){
-    if(t>=seg.start && t<=seg.end){
-      const r=(t-seg.start)/(seg.end-seg.start||1);
-      const a=locations[seg.from], b=locations[seg.to];
-      return applyOffset([a[0]+(b[0]-a[0])*r, a[1]+(b[1]-a[1])*r], person);
-    }
+function getPositionFor(p,t){
+ const s=schedules[p];
+ if(!s) return applyOffset(locations[defaultLocation[p]],p);
+ if(t<s[0].start) return applyOffset(locations[defaultLocation[p]],p);
+ if(t>s[s.length-1].end) return applyOffset(locations[s[s.length-1].to],p);
+ for(const seg of s){
+  if(t>=seg.start && t<=seg.end){
+   const r=(t-seg.start)/(seg.end-seg.start || 1);
+   const A=locations[seg.from], B=locations[seg.to];
+   return applyOffset([A[0]+(B[0]-A[0])*r, A[1]+(B[1]-A[1])*r],p);
   }
-  for(let i=0;i<s.length-1;i++){
-    if(t>s[i].end && t<s[i+1].start) return applyOffset(locations[s[i].to],person);
-  }
-  return applyOffset(locations[defaultLocation[person]],person);
+ }
+ for(let i=0;i<s.length-1;i++){
+  if(t>s[i].end && t<s[i+1].start) return applyOffset(locations[s[i].to],p);
+ }
+ return applyOffset(locations[defaultLocation[p]],p);
 }
 
 // Timeline / animation
 let currentTime = Number(timeSlider.min);
+
 function updateAll(t){
   currentTime=t;
-  for(const p in markers) markers[p].setLatLng(getPositionFor(p,t));
-  timeDisplay.textContent = "Time: "+formatTime(t);
+  for(const p in markers) {
+    markers[p].setLatLng(getPositionFor(p,t));
+  }
+  timeDisplay.textContent = "Time: " + formatTime(t);
 }
 updateAll(currentTime);
 
+// Animation controls
 let isPlaying=true, dragging=false;
 
-timeSlider.oninput=e=>{dragging=true;updateAll(+e.target.value);}
-timeSlider.onchange=e=>{dragging=false;}
+timeSlider.oninput = e => {
+  dragging=true;
+  updateAll(+e.target.value);
+};
+timeSlider.onchange = e => {
+  dragging=false;
+};
 
-playPauseBtn.onclick=()=>{
+playPauseBtn.onclick = () => {
   isPlaying=!isPlaying;
   playPauseBtn.textContent=isPlaying?"Pause":"Play";
 };
 
 setInterval(()=>{
-  if(!isPlaying||dragging) return;
-  if(++currentTime>Number(timeSlider.max)){
-    currentTime=Number(timeSlider.max);
-    isPlaying=false;
+  if(!isPlaying || dragging) return;
+  if(++currentTime > Number(timeSlider.max)){
+    currentTime = Number(timeSlider.max);
+    isPlaying = false;
     playPauseBtn.textContent="Play";
   }
-  timeSlider.value=currentTime;
+  timeSlider.value = currentTime;
   updateAll(currentTime);
 },300);
 </script>
