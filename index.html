@@ -152,7 +152,16 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// --- Time helper ---
+// ---------- DOM ELEMENTS ----------
+const timeSlider   = document.getElementById('time-slider');
+const timeDisplay  = document.getElementById('time-display');
+const playPauseBtn = document.getElementById('play-pause');
+
+const dayStart = Number(timeSlider.min);  // 510 = 08:30
+const dayEnd   = Number(timeSlider.max);  // 990 = 16:30
+let currentTime = dayStart;
+
+// ---------- HELPERS ----------
 function toMinutes(t) {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;
@@ -165,12 +174,7 @@ function formatTime(minutes) {
   return `${hh}:${mm}`;
 }
 
-// --- DOM references ---
-const timeSlider   = document.getElementById('time-slider');
-const timeDisplay  = document.getElementById('time-display');
-const playPauseBtn = document.getElementById('play-pause');
-
-// --- Locations ---
+// ---------- LOCATIONS ----------
 const locations = {
   house:[52.954205,-1.146630],
   ballet:[52.930870,-1.129820],
@@ -182,11 +186,10 @@ const locations = {
   work:[52.979500,-1.214000]
 };
 
-// --- Map ---
+// ---------- MAP ----------
 const map = L.map('map').setView([52.97, -1.14], 12);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
 
-// Pins
 const placeLabels = {
  house:"Home", ballet:"Ballet", football:"Football", swimming:"Swimming",
  paviors:"Paviors", granny:"Granny & Grandad", party:"Party", work:"Estelle's Work"
@@ -195,7 +198,7 @@ for (const key in locations) {
   L.marker(locations[key]).addTo(map).bindPopup(placeLabels[key]);
 }
 
-// People
+// ---------- PEOPLE ----------
 const colours = {
   alex:'pink', granny:'red', billy:'lightblue',
   grandad:'darkblue', estelle:'purple', george:'green'
@@ -206,7 +209,7 @@ const defaultLocation = {
   granny:'granny', grandad:'granny'
 };
 
-// --- OFFSETS (30% smaller than previous good ones) ---
+// OFFSETS (30% smaller – closer together but not overlapping)
 const offsets = {
   alex:    [ 0.0021,  0.0000],
   estelle: [-0.0021,  0.0000],
@@ -217,11 +220,11 @@ const offsets = {
 };
 
 function applyOffset(latlng, person){
-  const off=offsets[person] || [0,0];
+  const off = offsets[person] || [0,0];
   return [latlng[0]+off[0], latlng[1]+off[1]];
 }
 
-// Schedules
+// ---------- SCHEDULES ----------
 function seg(s,e,f,t){return{start:toMinutes(s),end:toMinutes(e),from:f,to:t};}
 
 const schedules={
@@ -263,7 +266,7 @@ const schedules={
  ]
 };
 
-// --- Create markers (with visible black border) ---
+// ---------- MARKERS ----------
 const markers={};
 for(const person in colours){
   const start=locations[defaultLocation[person]];
@@ -271,8 +274,8 @@ for(const person in colours){
     radius:10,
     stroke:true,
     fill:true,
-    color:"black",
-    weight:3,
+    color:"black",        // border
+    weight:3,             // border thickness
     fillColor:colours[person],
     fillOpacity:1
   })
@@ -280,12 +283,13 @@ for(const person in colours){
   .bindTooltip(person.charAt(0).toUpperCase()+person.slice(1),{offset:[10,0]});
 }
 
-// Position calculation
+// ---------- POSITION CALC ----------
 function getPositionFor(p,t){
  const s=schedules[p];
  if(!s) return applyOffset(locations[defaultLocation[p]],p);
  if(t<s[0].start) return applyOffset(locations[defaultLocation[p]],p);
  if(t>s[s.length-1].end) return applyOffset(locations[s[s.length-1].to],p);
+
  for(const seg of s){
   if(t>=seg.start && t<=seg.end){
    const r=(t-seg.start)/(seg.end-seg.start || 1);
@@ -293,50 +297,61 @@ function getPositionFor(p,t){
    return applyOffset([A[0]+(B[0]-A[0])*r, A[1]+(B[1]-A[1])*r],p);
   }
  }
+
  for(let i=0;i<s.length-1;i++){
-  if(t>s[i].end && t<s[i+1].start) return applyOffset(locations[s[i].to],p);
+  if(t>s[i].end && t<s[i+1].start){
+    return applyOffset(locations[s[i].to],p);
+  }
  }
  return applyOffset(locations[defaultLocation[p]],p);
 }
 
-// Timeline / animation
-let currentTime = Number(timeSlider.min);
-
+// ---------- RENDER LOOP ----------
 function updateAll(t){
-  currentTime=t;
-  for(const p in markers) {
+  currentTime = t;
+  for(const p in markers){
     markers[p].setLatLng(getPositionFor(p,t));
   }
   timeDisplay.textContent = "Time: " + formatTime(t);
 }
-updateAll(currentTime);
 
-// Animation controls
-let isPlaying=true, dragging=false;
+// initial draw
+timeSlider.value = dayStart;
+updateAll(dayStart);
 
-timeSlider.oninput = e => {
-  dragging=true;
-  updateAll(+e.target.value);
-};
-timeSlider.onchange = e => {
-  dragging=false;
-};
+// controls
+let isPlaying = true;
+let dragging  = false;
 
-playPauseBtn.onclick = () => {
-  isPlaying=!isPlaying;
-  playPauseBtn.textContent=isPlaying?"Pause":"Play";
-};
+timeSlider.addEventListener('input', e => {
+  dragging = true;
+  const t = Number(e.target.value);
+  updateAll(t);
+});
 
-setInterval(()=>{
-  if(!isPlaying || dragging) return;
-  if(++currentTime > Number(timeSlider.max)){
-    currentTime = Number(timeSlider.max);
+timeSlider.addEventListener('change', e => {
+  dragging = false;
+  const t = Number(e.target.value);
+  updateAll(t);
+});
+
+playPauseBtn.addEventListener('click', () => {
+  isPlaying = !isPlaying;
+  playPauseBtn.textContent = isPlaying ? "Pause" : "Play";
+});
+
+// autoplay
+setInterval(() => {
+  if (!isPlaying || dragging) return;
+  currentTime += 1; // 1 minute per tick
+  if (currentTime > dayEnd) {
+    currentTime = dayEnd;
     isPlaying = false;
-    playPauseBtn.textContent="Play";
+    playPauseBtn.textContent = "Play";
   }
   timeSlider.value = currentTime;
   updateAll(currentTime);
-},300);
+}, 300);
 </script>
 </body>
 </html>
