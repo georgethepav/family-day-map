@@ -2,11 +2,20 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Family Movements Animated Map</title>
+  <title>Family Day Animated Map</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
-    html, body { margin: 0; padding: 0; height: 100%; }
-    #map { height: 100vh; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+    #map {
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* Bottom timeline + legend */
     #controls {
       position: fixed;
       left: 0;
@@ -61,6 +70,7 @@
     .estelle { background: purple; }
     .george { background: green; }
 
+    /* Top-right locations legend */
     #places-legend {
       position: absolute;
       top: 10px;
@@ -91,15 +101,17 @@
   </style>
 </head>
 <body>
+
 <div id="places-legend">
   <div id="places-legend-title">Locations</div>
-  <div class="place-item"><span class="place-pin">📍</span><span>Paviors – Burntstump Hill, Arnold</span></div>
+  <div class="place-item"><span class="place-pin">📍</span><span>Home – 21 Cannon St</span></div>
   <div class="place-item"><span class="place-pin">📍</span><span>Ballet – St Giles, West Bridgford</span></div>
   <div class="place-item"><span class="place-pin">📍</span><span>Football – Digby Avenue, Mapperley</span></div>
   <div class="place-item"><span class="place-pin">📍</span><span>Swimming – Arnold Leisure Centre</span></div>
-  <div class="place-item"><span class="place-pin">📍</span><span>Home – 21 Cannon St</span></div>
+  <div class="place-item"><span class="place-pin">📍</span><span>Paviors – Burntstump Hill, Arnold</span></div>
   <div class="place-item"><span class="place-pin">📍</span><span>Granny &amp; Grandad – Burton Joyce</span></div>
   <div class="place-item"><span class="place-pin">📍</span><span>Party – Gedling Road, Woodthorpe</span></div>
+  <div class="place-item"><span class="place-pin">📍</span><span>Estelle’s Work – Broxtowe Police Station</span></div>
 </div>
 
 <div id="controls">
@@ -120,32 +132,56 @@
 </div>
 
 <div id="map"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// Helper to convert HH:MM to minutes from midnight
+// --- Helper: time to minutes ---
 function toMinutes(t) {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;
 }
 
-// Coordinates for locations
+// --- Locations (approx coords) ---
 const locations = {
-  house: [52.954205, -1.146630],
-  ballet: [52.930870, -1.129820],
-  football: [52.988680, -1.111820],
-  swimming: [53.000690, -1.133000],
-  paviors: [53.023270, -1.142700],
-  granny: [52.986890, -1.032500],
-  party: [52.993650, -1.132550]
+  house:   [52.954205, -1.146630], // 21 Cannon St
+  ballet:  [52.930870, -1.129820], // St Giles, West Bridgford
+  football:[52.988680, -1.111820], // Digby Ave
+  swimming:[53.000690, -1.133000], // Arnold Leisure
+  paviors: [53.023270, -1.142700], // Paviors RFC
+  granny:  [52.986890, -1.032500], // Burton Joyce
+  party:   [52.993650, -1.132550], // Gedling Rd, Woodthorpe
+  work:    [52.979500, -1.214000]  // Broxtowe Police Station (approx)
 };
 
-const map = L.map('map').setView([52.97, -1.13], 12);
+// --- Map setup ---
+const map = L.map('map').setView([52.97, -1.14], 12);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19
 }).addTo(map);
 
-// Person colours
+// Add map pins with labels (names on the map)
+const placeLabels = {
+  house:  "Home",
+  ballet: "Ballet",
+  football: "Football",
+  swimming: "Swimming",
+  paviors: "Paviors",
+  granny: "Granny & Grandad",
+  party: "Party",
+  work: "Estelle's Work"
+};
+
+for (const key in locations) {
+  L.marker(locations[key])
+    .addTo(map)
+    .bindTooltip(placeLabels[key], {
+      permanent: true,
+      direction: 'top',
+      offset: [0, -10]
+    });
+}
+
+// --- Person colours ---
 const colours = {
   alex: 'pink',
   granny: 'red',
@@ -155,7 +191,7 @@ const colours = {
   george: 'green'
 };
 
-// Default starting locations
+// --- Starting locations ---
 const defaultLocation = {
   alex: 'house',
   estelle: 'house',
@@ -165,8 +201,22 @@ const defaultLocation = {
   grandad: 'granny'
 };
 
-// Build movement segments from the itinerary
-// Each segment: { start, end, from, to }
+// --- Non-overlap offsets so blobs are side-by-side ---
+const offsets = {
+  alex:    [ 0.0010,  0.0000],
+  estelle: [-0.0010,  0.0000],
+  billy:   [ 0.0000,  0.0010],
+  george:  [ 0.0000, -0.0010],
+  granny:  [ 0.0007,  0.0007],
+  grandad: [-0.0007, -0.0007]
+};
+
+function applyOffset(latlng, person) {
+  const off = offsets[person] || [0, 0];
+  return [latlng[0] + off[0], latlng[1] + off[1]];
+}
+
+// Helper to build segments
 function seg(start, end, from, to) {
   return {
     start: toMinutes(start),
@@ -176,33 +226,36 @@ function seg(start, end, from, to) {
   };
 }
 
+// --- Schedules per person based on your itinerary ---
+
 const schedules = {
   estelle: [
     seg('08:30','09:00','house','ballet'),
     seg('09:45','10:25','ballet','swimming'),
     seg('11:30','11:45','swimming','house'),
     seg('13:00','13:20','house','granny'),
-    seg('13:30','14:00','granny','party')
-    // Estelle then goes to work (location not specified), so we leave her at the party
+    seg('13:30','14:00','granny','party'),
+    seg('14:05','14:30','party','work') // to Broxtowe Police Station
   ],
   alex: [
     seg('08:30','09:00','house','ballet'),
     seg('09:45','10:25','ballet','swimming'),
     seg('11:30','11:45','swimming','house'),
     seg('13:00','13:20','house','granny'),
+    // Stays with Granny, then:
     seg('13:45','14:15','granny','paviors'),
     seg('15:30','16:00','paviors','party'),
     seg('16:00','16:30','party','paviors')
   ],
   billy: [
-    seg('08:45','09:00','house','football'), // approx. arrival
+    seg('08:45','09:00','house','football'),
     seg('10:00','10:10','football','house'),
     seg('13:00','13:20','house','granny'),
     seg('13:30','14:00','granny','party'),
     seg('16:00','16:30','party','paviors')
   ],
   george: [
-    seg('08:45','09:00','house','football'), // approx. arrival
+    seg('08:45','09:00','house','football'),
     seg('10:00','10:10','football','house'),
     seg('11:55','12:15','house','granny'),
     seg('12:15','12:45','granny','paviors')
@@ -217,22 +270,7 @@ const schedules = {
   ]
 };
 
-// Create small offsets so people at the same place don't overlap
-const offsets = {
-  alex:   [ 0.00040,  0.00000],
-  estelle:[-0.00040,  0.00000],
-  billy:  [ 0.00000,  0.00040],
-  george: [ 0.00000, -0.00040],
-  granny: [ 0.00030,  0.00030],
-  grandad:[-0.00030, -0.00030]
-};
-
-function applyOffset(latlng, person) {
-  const off = offsets[person] || [0, 0];
-  return [latlng[0] + off[0], latlng[1] + off[1]];
-}
-
-// Create markers for each person
+// --- Create person markers ---
 const markers = {};
 for (const person in colours) {
   const startLocKey = defaultLocation[person];
@@ -242,14 +280,20 @@ for (const person in colours) {
     color: colours[person],
     fillColor: colours[person],
     fillOpacity: 1
-  }).addTo(map);
+  })
+  .addTo(map)
+  .bindTooltip(person.charAt(0).toUpperCase() + person.slice(1), {
+    permanent: false,
+    direction: 'right',
+    offset: [8, 0]
+  });
 }
 
-// Time controls
+// --- Time controls ---
 const timeSlider = document.getElementById('time-slider');
 const timeDisplay = document.getElementById('time-display');
-const dayStart = Number(timeSlider.min); // 510 = 08:30
-const dayEnd = Number(timeSlider.max);   // 990 = 16:30
+const dayStart = Number(timeSlider.min); // 08:30
+const dayEnd = Number(timeSlider.max);   // 16:30
 
 function formatTime(minutes) {
   const h = Math.floor(minutes / 60);
@@ -259,27 +303,28 @@ function formatTime(minutes) {
   return `${hh}:${mm}`;
 }
 
+// Get position for a person at time t
 function getPositionFor(person, t) {
   const segs = schedules[person] || [];
   if (segs.length === 0) {
     return applyOffset(locations[defaultLocation[person]], person);
   }
 
-  // Before first segment
+  // before first movement
   if (t < segs[0].start) {
     return applyOffset(locations[defaultLocation[person]], person);
   }
 
-  // After last segment
+  // after last movement
   if (t > segs[segs.length - 1].end) {
     return applyOffset(locations[segs[segs.length - 1].to], person);
   }
 
-  // During a segment or between segments
+  // during a journey
   for (const s of segs) {
     if (t >= s.start && t <= s.end) {
       const from = locations[s.from];
-      const to = locations[s.to];
+      const to   = locations[s.to];
       const ratio = (t - s.start) / (s.end - s.start || 1);
       const baseLat = from[0] + (to[0] - from[0]) * ratio;
       const baseLng = from[1] + (to[1] - from[1]) * ratio;
@@ -287,7 +332,7 @@ function getPositionFor(person, t) {
     }
   }
 
-  // If exactly between segments, just hold last known location
+  // between journeys, stay at last 'to'
   for (let i = 0; i < segs.length - 1; i++) {
     if (t > segs[i].end && t < segs[i+1].start) {
       return applyOffset(locations[segs[i].to], person);
@@ -305,25 +350,26 @@ function updateAllPositions(t) {
   timeDisplay.textContent = 'Time: ' + formatTime(t);
 }
 
-// Initial draw
+// initial position
 updateAllPositions(dayStart);
 
-// Slider interaction
+// Slider interaction + autoplay
 let userIsDragging = false;
-
 timeSlider.addEventListener('input', () => {
   const t = Number(timeSlider.value);
   userIsDragging = true;
   updateAllPositions(t);
 });
+timeSlider.addEventListener('change', () => {
+  userIsDragging = false;
+});
 
-// Simple autoplay of the day timeline
 let currentTime = dayStart;
-const stepMinutes = 1;       // 1 minute per frame
-const stepIntervalMs = 300;  // speed of animation
+const stepMinutes = 1;
+const stepIntervalMs = 300;
 
 const autoplay = setInterval(() => {
-  if (userIsDragging) return; // if user is scrubbing, don't override
+  if (userIsDragging) return;
   currentTime += stepMinutes;
   if (currentTime > dayEnd) {
     clearInterval(autoplay);
