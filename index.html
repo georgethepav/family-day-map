@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Family Movements Animated Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; }
+    #map { height: 100vh; }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-family: sans-serif;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      max-width: 320px;
+    }
+    #time-display {
+      font-weight: bold;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+    #time-slider {
+      width: 100%;
+    }
+    #legend {
+      margin-top: 8px;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 2px;
+    }
+    .swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 1px solid #555;
+    }
+    .alex { background: pink; }
+    .granny { background: red; }
+    .billy { background: lightblue; }
+    .grandad { background: darkblue; }
+    .estelle { background: purple; }
+    .george { background: green; }
+  </style>
+</head>
+<body>
+<div id="controls">
+  <div id="time-display">Time: 08:30</div>
+  <input type="range" id="time-slider" min="510" max="990" value="510" step="1" />
+  <div id="legend">
+    <div class="legend-item"><span class="swatch alex"></span> Alex (pink)</div>
+    <div class="legend-item"><span class="swatch estelle"></span> Estelle (purple)</div>
+    <div class="legend-item"><span class="swatch billy"></span> Billy (light blue)</div>
+    <div class="legend-item"><span class="swatch george"></span> George (green)</div>
+    <div class="legend-item"><span class="swatch granny"></span> Granny (red)</div>
+    <div class="legend-item"><span class="swatch grandad"></span> Grandad (dark blue)</div>
+  </div>
+</div>
+<div id="map"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// Helper to convert HH:MM to minutes from midnight
+function toMinutes(t) {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+
+// Coordinates for locations
+const locations = {
+  house: [52.954205, -1.146630],
+  ballet: [52.930870, -1.129820],
+  football: [52.988680, -1.111820],
+  swimming: [53.000690, -1.133000],
+  paviors: [53.023270, -1.142700],
+  granny: [52.986890, -1.032500],
+  party: [52.993650, -1.132550]
+};
+
+const map = L.map('map').setView([52.97, -1.13], 12);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19
+}).addTo(map);
+
+// Person colours
+const colours = {
+  alex: 'pink',
+  granny: 'red',
+  billy: 'lightblue',
+  grandad: 'darkblue',
+  estelle: 'purple',
+  george: 'green'
+};
+
+// Default starting locations
+const defaultLocation = {
+  alex: 'house',
+  estelle: 'house',
+  billy: 'house',
+  george: 'house',
+  granny: 'granny',
+  grandad: 'granny'
+};
+
+// Build movement segments from the itinerary
+// Each segment: { start, end, from, to }
+function seg(start, end, from, to) {
+  return {
+    start: toMinutes(start),
+    end: toMinutes(end),
+    from,
+    to
+  };
+}
+
+const schedules = {
+  estelle: [
+    seg('08:30','09:00','house','ballet'),
+    seg('09:45','10:25','ballet','swimming'),
+    seg('11:30','11:45','swimming','house'),
+    seg('13:00','13:20','house','granny'),
+    seg('13:30','14:00','granny','party')
+    // Estelle then goes to work (location not specified), so we leave her at the party
+  ],
+  alex: [
+    seg('08:30','09:00','house','ballet'),
+    seg('09:45','10:25','ballet','swimming'),
+    seg('11:30','11:45','swimming','house'),
+    seg('13:00','13:20','house','granny'),
+    seg('13:45','14:15','granny','paviors'),
+    seg('15:30','16:00','paviors','party'),
+    seg('16:00','16:30','party','paviors')
+  ],
+  billy: [
+    seg('08:45','09:00','house','football'), // approx. arrival
+    seg('10:00','10:10','football','house'),
+    seg('13:00','13:20','house','granny'),
+    seg('13:30','14:00','granny','party'),
+    seg('16:00','16:30','party','paviors')
+  ],
+  george: [
+    seg('08:45','09:00','house','football'), // approx. arrival
+    seg('10:00','10:10','football','house'),
+    seg('11:55','12:15','house','granny'),
+    seg('12:15','12:45','granny','paviors')
+  ],
+  grandad: [
+    seg('12:15','12:45','granny','paviors')
+  ],
+  granny: [
+    seg('13:45','14:15','granny','paviors'),
+    seg('15:30','16:00','paviors','party'),
+    seg('16:00','16:30','party','paviors')
+  ]
+};
+
+// Create markers for each person
+const markers = {};
+for (const person in colours) {
+  const startLocKey = defaultLocation[person];
+  const startLatLng = locations[startLocKey];
+  markers[person] = L.circleMarker(startLatLng, {
+    radius: 8,
+    color: colours[person],
+    fillColor: colours[person],
+    fillOpacity: 1
+  }).addTo(map);
+}
+
+// Time controls
+const timeSlider = document.getElementById('time-slider');
+const timeDisplay = document.getElementById('time-display');
+const dayStart = Number(timeSlider.min); // 510 = 08:30
+const dayEnd = Number(timeSlider.max);   // 990 = 16:30
+
+function formatTime(minutes) {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  const hh = h.toString().padStart(2,'0');
+  const mm = m.toString().padStart(2,'0');
+  return `${hh}:${mm}`;
+}
+
+function getPositionFor(person, t) {
+  const segs = schedules[person] || [];
+  if (segs.length === 0) {
+    return locations[defaultLocation[person]];
+  }
+
+  // Before first segment
+  if (t < segs[0].start) {
+    return locations[defaultLocation[person]];
+  }
+
+  // After last segment
+  if (t > segs[segs.length - 1].end) {
+    return locations[segs[segs.length - 1].to];
+  }
+
+  // During a segment or between segments
+  for (const s of segs) {
+    if (t >= s.start && t <= s.end) {
+      const from = locations[s.from];
+      const to = locations[s.to];
+      const ratio = (t - s.start) / (s.end - s.start || 1);
+      const lat = from[0] + (to[0] - from[0]) * ratio;
+      const lng = from[1] + (to[1] - from[1]) * ratio;
+      return [lat, lng];
+    }
+  }
+
+  // If exactly between segments, just hold last known location
+  for (let i = 0; i < segs.length - 1; i++) {
+    if (t > segs[i].end && t < segs[i+1].start) {
+      return locations[segs[i].to];
+    }
+  }
+
+  return locations[defaultLocation[person]];
+}
+
+function updateAllPositions(t) {
+  for (const person in markers) {
+    const pos = getPositionFor(person, t);
+    markers[person].setLatLng(pos);
+  }
+  timeDisplay.textContent = 'Time: ' + formatTime(t);
+}
+
+// Initial draw
+updateAllPositions(dayStart);
+
+// Slider interaction
+let userIsDragging = false;
+
+timeSlider.addEventListener('input', () => {
+  const t = Number(timeSlider.value);
+  userIsDragging = true;
+  updateAllPositions(t);
+});
+
+// Simple autoplay of the day timeline
+let currentTime = dayStart;
+const stepMinutes = 1;       // 1 minute per frame
+const stepIntervalMs = 300;  // speed of animation
+
+const autoplay = setInterval(() => {
+  if (userIsDragging) return; // if user is scrubbing, don't override
+  currentTime += stepMinutes;
+  if (currentTime > dayEnd) {
+    clearInterval(autoplay);
+    return;
+  }
+  timeSlider.value = currentTime.toString();
+  updateAllPositions(currentTime);
+}, stepIntervalMs);
+</script>
+</body>
+</html>
