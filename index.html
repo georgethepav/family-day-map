@@ -61,7 +61,7 @@
       width: 12px;
       height: 12px;
       border-radius: 50%;
-      border: 1px solid #555;
+      border: 1px solid #000;
     }
     .alex { background: pink; }
     .granny { background: red; }
@@ -215,8 +215,6 @@ const defaultLocation = {
 };
 
 // --- Larger non-overlap offsets ---
-// These are big enough that circles definitely don't sit on top of each other.
-// If you want them closer/tighter, reduce these numbers slightly.
 const offsets = {
   alex:    [ 0.0070,  0.0000],
   estelle: [-0.0070,  0.0000],
@@ -283,15 +281,16 @@ const schedules = {
   ]
 };
 
-// --- Create person markers ---
+// --- Create person markers with black borders ---
 const markers = {};
 for (const person in colours) {
   const startLocKey = defaultLocation[person];
   const startLatLng = locations[startLocKey];
   markers[person] = L.circleMarker(applyOffset(startLatLng, person), {
     radius: 10,
-    color: colours[person],
-    fillColor: colours[person],
+    color: "black",              // black border
+    weight: 2,                   // border thickness
+    fillColor: colours[person],  // coloured fill
     fillOpacity: 1
   })
   .addTo(map)
@@ -318,7 +317,6 @@ function formatTime(minutes) {
   return `${hh}:${mm}`;
 }
 
-// Get position for a person at time t
 function getPositionFor(person, t) {
   const segs = schedules[person] || [];
   if (segs.length === 0) {
@@ -390,7 +388,6 @@ playPauseBtn.addEventListener('click', () => {
   playPauseBtn.textContent = isPlaying ? 'Pause' : 'Play';
 });
 
-// Autoplay loop
 const stepMinutes = 1;
 const stepIntervalMs = 300;
 
